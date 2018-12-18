@@ -9,14 +9,14 @@
 static herr_t H5VL_swift_init(hid_t vipl_id);
 static herr_t H5VL_swift_term(hid_t vtpl_id);
 /* Datatype callbacks */
-static void *H5VL_swift_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t type_id, hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req);
-static void *H5VL_swift_datatype_open(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req);
+static void *H5VL_swift_datatype_commit(void *obj, H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req);
+static void *H5VL_swift_datatype_open(void *obj, H5VL_loc_params_t *loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req);
 static herr_t H5VL_swift_datatype_get(void *dt, H5VL_datatype_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
 static herr_t H5VL_swift_datatype_close(void *dt, hid_t dxpl_id, void **req);
 
 /* Dataset callbacks */
-static void *H5VL_swift_dataset_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req);
-static void *H5VL_swift_dataset_open(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req);
+static void *H5VL_swift_dataset_create(void *obj, H5VL_loc_params_t *loc_params, const char *name, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req);
+static void *H5VL_swift_dataset_open(void *obj, H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req);
 static herr_t H5VL_swift_dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id,
                                     hid_t file_space_id, hid_t plist_id, void *buf, void **req);
 static herr_t H5VL_swift_dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id,
@@ -30,14 +30,14 @@ static herr_t H5VL_swift_file_get(void *file, H5VL_file_get_t get_type, hid_t dx
 static herr_t H5VL_swift_file_close(void *file, hid_t dxpl_id, void **req);
 
 /* Group callbacks */
-static void *H5VL_swift_group_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
+static void *H5VL_swift_group_create(void *obj, H5VL_loc_params_t *loc_params, const char *name, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
 static herr_t H5VL_swift_group_close(void *grp, hid_t dxpl_id, void **req);
 
 /* Link callbacks */
 
 /* Object callbacks */
-static void *H5VL_swift_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req);
-static herr_t H5VL_swift_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+static void *H5VL_swift_object_open(void *obj, H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req);
+static herr_t H5VL_swift_object_specific(void *obj, H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
 
 hid_t native_plugin_id = -1;
 
@@ -126,12 +126,13 @@ typedef struct H5VL_swift_t {
 static void *
 H5VL_swift_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
+    H5VL_pass_through_info_t *info;
     hid_t under_fapl;
     H5VL_swift_t *file;
 
     file = (H5VL_swift_t *)calloc(1, sizeof(H5VL_swift_t));
 
-    under_fapl = *((hid_t *)H5Pget_vol_info(fapl_id));
+    under_fapl = *((hid_t *)H5Pget_vol_info(fapl_id, (void **)&info));
     file->under_object = H5VLfile_create(name, flags, fcpl_id, under_fapl, dxpl_id, req);
 
     printf("------- SWIFT H5Fcreate\n");
@@ -141,12 +142,13 @@ H5VL_swift_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fa
 static void *
 H5VL_swift_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
+    H5VL_pass_through_info_t *info;
     hid_t under_fapl;
     H5VL_swift_t *file;
 
     file = (H5VL_swift_t *)calloc(1, sizeof(H5VL_swift_t));
 
-    under_fapl = *((hid_t *)H5Pget_vol_info(fapl_id));
+    under_fapl = *((hid_t *)H5Pget_vol_info(fapl_id, (void **)&info));
     file->under_object = H5VLfile_open(name, flags, under_fapl, dxpl_id, req);
 
     printf("------- SWIFT H5Fopen\n");
@@ -176,7 +178,7 @@ H5VL_swift_file_close(void *file, hid_t dxpl_id, void **req)
 }
 /* Group callbacks Implementation*/
 static void *
-H5VL_swift_group_create(void *obj, H5VL_loc_params_t loc_params, const char *name, 
+H5VL_swift_group_create(void *obj, H5VL_loc_params_t *loc_params, const char *name, 
                       hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req)
 {
     H5VL_swift_t *group;
@@ -203,7 +205,7 @@ H5VL_swift_group_close(void *grp, hid_t dxpl_id, void **req)
 }
 /* Datatypes callbacks Implementation*/
 static void *
-H5VL_swift_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *name, 
+H5VL_swift_datatype_commit(void *obj, H5VL_loc_params_t *loc_params, const char *name, 
                          hid_t type_id, hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req)
 {
     H5VL_swift_t *dt;
@@ -218,7 +220,7 @@ H5VL_swift_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *
     return dt;
 }
 static void *
-H5VL_swift_datatype_open(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req)
+H5VL_swift_datatype_open(void *obj, H5VL_loc_params_t *loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req)
 {
     H5VL_swift_t *dt;
     H5VL_swift_t *o = (H5VL_swift_t *)obj;  
@@ -257,7 +259,7 @@ H5VL_swift_datatype_close(void *dt, hid_t dxpl_id, void **req)
 }
 /* Object callbacks Implementation*/
 static void *
-H5VL_swift_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req)
+H5VL_swift_object_open(void *obj, H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req)
 {
     H5VL_swift_t *new_obj;
     H5VL_swift_t *o = (H5VL_swift_t *)obj;
@@ -271,7 +273,7 @@ H5VL_swift_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *open
 }
 
 static herr_t 
-H5VL_swift_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific_t specific_type, 
+H5VL_swift_object_specific(void *obj, H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type, 
                          hid_t dxpl_id, void **req, va_list arguments)
 {
     H5VL_swift_t *o = (H5VL_swift_t *)obj;
@@ -283,7 +285,7 @@ H5VL_swift_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_
 }
 /* Dataset callbacks Implementation*/
 static void *
-H5VL_swift_dataset_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req) 
+H5VL_swift_dataset_create(void *obj, H5VL_loc_params_t *loc_params, const char *name, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req) 
 {
     H5VL_swift_t *dset;
     H5VL_swift_t *o = (H5VL_swift_t *)obj;
@@ -297,7 +299,7 @@ H5VL_swift_dataset_create(void *obj, H5VL_loc_params_t loc_params, const char *n
 }
 
 static void *
-H5VL_swift_dataset_open(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
+H5VL_swift_dataset_open(void *obj, H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
     H5VL_swift_t *dset;
     H5VL_swift_t *o = (H5VL_swift_t *)obj;
@@ -346,14 +348,14 @@ H5VL_swift_dataset_close(void *dset, hid_t dxpl_id, void **req)
     return 1;
 }
 #if 0
-static void *H5VL_swift_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req){    
+static void *H5VL_swift_attr_create(void *obj, H5VL_loc_params_t *loc_params, const char *attr_name, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req){
 static herr_t H5VL_swift_attr_close(void *attr, hid_t dxpl_id, void **req){
 
 /* Datatype callbacks */
 
 
 /* Dataset callbacks */
-static void *H5VL_swift_dataset_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req){
+static void *H5VL_swift_dataset_create(void *obj, H5VL_loc_params_t *loc_params, const char *name, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req){
 static herr_t H5VL_swift_dataset_close(void *dset, hid_t dxpl_id, void **req){
 
 /* File callbacks */
@@ -364,7 +366,7 @@ static void *H5VL_swift_file_open(const char *name, unsigned flags, hid_t fapl_i
 
 /* Group callbacks */
 
-static void *H5VL_swift_group_open(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req){
+static void *H5VL_swift_group_open(void *obj, H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req){
 static herr_t H5VL_swift_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_list arguments){
 
 
