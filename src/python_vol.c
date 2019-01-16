@@ -1,6 +1,6 @@
 //#ifndef H5_VOL_H
 //#define H5_VOL_H
-#include <Python.h>
+#include <python3.6m/Python.h>
 #include <numpy/arrayobject.h>
 #include <stdio.h>
 #include <stdlib.h>
