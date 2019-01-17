@@ -25,6 +25,8 @@
 #include "python_vol.h"
 #include "inttypes.h"
 #include "timer.h"
+
+#include <mpi.h>
 struct timeval start_time[3];
 float elapse[3];
 #define PYTHON 502
