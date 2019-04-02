@@ -6,25 +6,11 @@
 #include <stdlib.h>
 #include <assert.h>
 #include "hdf5.h"
-#include "H5private.h"          /* Generic Functions                    */
-
-#include "H5Dprivate.h"         /* Datasets                             */
-//#include "H5Eprivate.h"         /* Error handling                       */
-#include "H5Fprivate.h"         /* Files                                */
-#include "H5FDprivate.h"        /* File drivers                         */
-//#include "H5FFprivate.h"        /* Fast Forward                         */
-#include "H5Iprivate.h"         /* IDs                                  */
-//#include "H5Mprivate.h"         /* Maps                                 */
-//#include "H5MMprivate.h"        /* Memory management                    */
-//#include "H5Opkg.h"             /* Objects                              */
-#include "H5Pprivate.h"         /* Property lists                       */
-#include "H5Sprivate.h"         /* Dataspaces                           */
-//#include "H5TRprivate.h"        /* Transactions                         */
-#include "H5VLprivate.h"        /* VOL plugins                          */
 
 #include "python_vol.h"
 #include "inttypes.h"
-#include "timer.h"
+//#include "timer.h"
+
 struct timeval start_time[3];
 float elapse[3];
 #define PYTHON 502
@@ -44,14 +30,14 @@ typedef struct H5VL_python_fapl_t {
 //static herr_t H5VL_python_init(hid_t vipl_id);
 //static herr_t H5VL_python_term(hid_t vtpl_id);
 /* Datatype callbacks */
-static void *H5VL_python_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t type_id, hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req);
-static void *H5VL_python_datatype_open(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req);
+static void *H5VL_python_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id, hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req);
+static void *H5VL_python_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req);
 static herr_t H5VL_python_datatype_get(void *dt, H5VL_datatype_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
 static herr_t H5VL_python_datatype_close(void *dt, hid_t dxpl_id, void **req);
 
 /* Dataset callbacks */
-static void *H5VL_python_dataset_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req);
-static void *H5VL_python_dataset_open(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req);
+static void *H5VL_python_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req); 
+static void *H5VL_python_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req);
 static herr_t H5VL_python_dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id,
                                     hid_t file_space_id, hid_t plist_id, void *buf, void **req);
 static herr_t H5VL_python_dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id,
@@ -65,14 +51,14 @@ static herr_t H5VL_python_file_get(void *file, H5VL_file_get_t get_type, hid_t d
 static herr_t H5VL_python_file_close(void *file, hid_t dxpl_id, void **req);
 
 /* Group callbacks */
-static void *H5VL_python_group_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
+static void *H5VL_python_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
 static herr_t H5VL_python_group_close(void *grp, hid_t dxpl_id, void **req);
 
 /* Link callbacks */
 
 /* Object callbacks */
-static void *H5VL_python_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req);
-static herr_t H5VL_python_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+static void *H5VL_python_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req);
+static herr_t H5VL_python_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
 
 hid_t native_plugin_id = -1;
 
@@ -80,11 +66,23 @@ const H5VL_class_t H5VL_python_g = {
     0,							/* version */
     PYTHON,						/* value */
     "python",                                      	/* name */
+    0,
     NULL, //    H5VL_python_init,                        /* initialize */
     NULL, //    H5VL_python_term,                        /* terminate */
-    sizeof(hid_t),
-    NULL,
-    NULL,
+    {                                           /* info_cls */
+        sizeof(hid_t),
+        NULL,//H5VL_pass_through_info_copy,                /* copy    */
+        NULL,//H5VL_pass_through_info_cmp,                 /* compare */
+        NULL,//H5VL_pass_through_info_free,                /* free    */
+        NULL,//H5VL_pass_through_info_to_str,              /* to_str  */
+        NULL,//H5VL_pass_through_str_to_info,              /* from_str */
+    },
+    {                                           /* wrap_cls */
+        NULL,//H5VL_pass_through_get_object,               /* get_object   */
+        NULL,//H5VL_pass_through_get_wrap_ctx,             /* get_wrap_ctx */
+        NULL,//H5VL_pass_through_wrap_object,              /* wrap_object  */
+        NULL,//H5VL_pass_through_free_wrap_ctx,            /* free_wrap_ctx */
+    },
     {                                           /* attribute_cls */
         NULL, //H5VL_python_attr_create,                /* create */
         NULL, //H5VL_python_attr_open,                  /* open */
@@ -145,6 +143,9 @@ const H5VL_class_t H5VL_python_g = {
         NULL, //H5VL_python_object_optional,            /* optional */
     },
     {
+        NULL,
+        NULL,
+        NULL,
         NULL,
         NULL,
         NULL
@@ -400,7 +401,7 @@ H5VL_python_file_close(void *file, hid_t dxpl_id, void **req)
 }
 /* Group callbacks Implementation*/
 static void *
-H5VL_python_group_create(void *obj, H5VL_loc_params_t loc_params, const char *name, 
+H5VL_python_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name,
                       hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req)
 {
     H5VL_python_t *group;
@@ -452,7 +453,7 @@ H5VL_python_group_close(void *grp, hid_t dxpl_id, void **req)
 }
 /* Datatypes callbacks Implementation*/
 static void *
-H5VL_python_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *name, 
+H5VL_python_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *name,
                          hid_t type_id, hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req)
 {
     H5VL_python_t *dt;
@@ -467,7 +468,7 @@ H5VL_python_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char 
     return dt;
 }
 static void *
-H5VL_python_datatype_open(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req)
+H5VL_python_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req)
 {
     H5VL_python_t *dt;
     H5VL_python_t *o = (H5VL_python_t *)obj;  
@@ -506,7 +507,7 @@ H5VL_python_datatype_close(void *dt, hid_t dxpl_id, void **req)
 }
 /* Object callbacks Implementation*/
 static void *
-H5VL_python_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req)
+H5VL_python_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req)
 {
     H5VL_python_t *new_obj;
     H5VL_python_t *o = (H5VL_python_t *)obj;
@@ -520,7 +521,7 @@ H5VL_python_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *ope
 }
 
 static herr_t 
-H5VL_python_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific_t specific_type, 
+H5VL_python_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type,
                          hid_t dxpl_id, void **req, va_list arguments)
 {
     H5VL_python_t *o = (H5VL_python_t *)obj;
@@ -560,7 +561,7 @@ void helper_dt (hid_t dcpl_id, H5VL_DT * dt){
 }
 //check vol layer, figure out what is calling this callback. 
 static void *
-H5VL_python_dataset_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req) 
+H5VL_python_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
     H5VL_python_t *dset;
     H5VL_python_t *o = (H5VL_python_t *)obj;
@@ -608,7 +609,7 @@ H5VL_python_dataset_create(void *obj, H5VL_loc_params_t loc_params, const char *
 
 }
 static void *
-H5VL_python_dataset_open(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
+H5VL_python_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
     H5VL_python_t *dset;
     H5VL_python_t *o = (H5VL_python_t *)obj;
